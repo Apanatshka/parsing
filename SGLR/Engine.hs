@@ -45,15 +45,15 @@ parse' :: (M.Stack a -> Either (Maybe a) (M.Stack a))
 parse' cont shift instr stack = case instr of
   Shift  (st',i2i') -> Right $ shift st' i2i' stack
   Reduce r          -> reduce cont r stack
-  Accept            -> Left $ Just $ (\(_,_,Srt (_,v)) -> v) $ head stack
+  Accept            -> Left $ Just $ (\(_,_,Trm (_,v)) -> v) $ head stack
   Error             -> Left Nothing
 
 reduce :: (M.Stack a -> Either (Maybe a) (M.Stack a)) -> M.Rule a -> M.Stack a -> Either (Maybe a) (M.Stack a)
 reduce parseFun r stack = parseFun =<< reductionResult
   where (n, goto, action) = r
         (ruleArgs,stack') = splitAt (fromIntegral n) stack
-        sort = action $ map (\(_,_,a) -> a) $ ruleArgs
+        term = action $ map (\(_,_,a) -> a) $ ruleArgs
         state = (\(a,_,_) -> a) $ head stack'
         maybeGotoState = WordMap.lookup state goto
-        doReduction (gotoState,i2i) = Right $ (gotoState, i2i, Srt sort) : stack'
+        doReduction (gotoState,i2i) = Right $ (gotoState, i2i, Trm term) : stack'
         reductionResult = Maybe.maybe (Left Nothing) doReduction maybeGotoState

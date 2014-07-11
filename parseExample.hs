@@ -45,15 +45,15 @@ input = B.pack $ map enumToIntegral [Id {-a-}, ColonEq, Num {-7-}, Semicolon, Id
 
 rule :: A.Array Int (M.Rule AST)
 rule = (\l -> A.listArray (0,length l - 1) l)
-  [ (3, gotoTable ! (enumToIntegral S), \[Srt (_,e2), _, Srt (_,e1)] -> (enumToIntegral S, Seq e1 e2))     -- S = S ";" S
-  , (3, gotoTable ! (enumToIntegral S), \[Srt (_,e), _, _] -> (enumToIntegral S, Assign e))                -- S = id ":=" E
-  , (4, gotoTable ! (enumToIntegral S), \[_, Srt (_,l), _, _] -> (enumToIntegral S, Print l))              -- S = "print" "(" L ")"
+  [ (3, gotoTable ! (enumToIntegral S), \[Trm (_,e2), _, Trm (_,e1)] -> (enumToIntegral S, Seq e1 e2))     -- S = S ";" S
+  , (3, gotoTable ! (enumToIntegral S), \[Trm (_,e), _, _] -> (enumToIntegral S, Assign e))                -- S = id ":=" E
+  , (4, gotoTable ! (enumToIntegral S), \[_, Trm (_,l), _, _] -> (enumToIntegral S, Print l))              -- S = "print" "(" L ")"
   , (1, gotoTable ! (enumToIntegral E), \[_] -> (enumToIntegral E, IdWrap))                                -- E = id
   , (1, gotoTable ! (enumToIntegral E), \[_] -> (enumToIntegral E, NumWrap))                               -- E = num
-  , (3, gotoTable ! (enumToIntegral E), \[Srt (_,e2), _, Srt (_,e1)] -> (enumToIntegral E, Plus e1 e2))    -- E = E "+" E
-  , (5, gotoTable ! (enumToIntegral E), \[_, Srt (_,e), _, Srt (_,s), _] -> (enumToIntegral E, Tuple s e)) -- E = "(" S "," E ")"
-  , (1, gotoTable ! (enumToIntegral L), \[Srt (_,e)] -> (enumToIntegral E, e))                             -- L = E
-  , (3, gotoTable ! (enumToIntegral L), \[Srt (_,e), _, Srt (_,l)] -> (enumToIntegral L, Comma l e))       -- L = L "," E
+  , (3, gotoTable ! (enumToIntegral E), \[Trm (_,e2), _, Trm (_,e1)] -> (enumToIntegral E, Plus e1 e2))    -- E = E "+" E
+  , (5, gotoTable ! (enumToIntegral E), \[_, Trm (_,e), _, Trm (_,s), _] -> (enumToIntegral E, Tuple s e)) -- E = "(" S "," E ")"
+  , (1, gotoTable ! (enumToIntegral L), \[Trm (_,e)] -> (enumToIntegral E, e))                             -- L = E
+  , (3, gotoTable ! (enumToIntegral L), \[Trm (_,e), _, Trm (_,l)] -> (enumToIntegral L, Comma l e))       -- L = L "," E
   ]
 
 shift  n = Shift  $ (n-1,instrTable ! (n-1))

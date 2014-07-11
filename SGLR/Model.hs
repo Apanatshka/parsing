@@ -17,21 +17,21 @@ import Data.WordMap.Strict
 -- unused for now
 {-# LANGUAGE UnboxedTuples #-}
 
-type Input  = Word8     -- ^ The input type, using what's in ByteStrings
-type Sort a = (Word, a) -- ^ A Sort, usually a capital letter in BNF, with the data from which it was constructed
+type Input  = Word8    -- ^ The input type, using what's in ByteStrings
+type Sort   = Word     -- ^ A Sort, usually a capital letter in BNF
+type State  = Word     -- ^ A state in the automaton that the SGLR parsing engine executes
+type Term a = (Sort,a) -- ^ A Term, made out of a Sort and the value constructed from the reduction
 
-data StackElem a = Inp Input | Srt (Sort a) deriving (Show) -- ^ A sum of Sort and Input
 -- | The LR stack, holding the state,
 --   a map from input to instruction,
 --   the stackelement
 type Stack     a = [(State, InputToInstr a, StackElem a)]
-
-type State = Word -- ^ A state in the automaton that the SGLR parsing engine executes
+data StackElem a = Inp Input | Trm (Term a) deriving (Show) -- ^ A sum of Sort and Input
 
 -- | A number of stack elements to pop,
 --   the sort it produces,
 --   the action to perform on those stackelements
-type Rule a = (Word, Goto a, [StackElem a] -> Sort a)
+type Rule a = (Word, Goto a, [StackElem a] -> Term a)
 
 -- | The possible instructions in the state/input table
 --   The table for state/sort only contains Goto instruction and are therefore unlabeled
