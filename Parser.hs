@@ -26,7 +26,6 @@ data Input = Id
            | ColonEq
            | ParensOpen
            | ParensClose
-           | EOF
            deriving (Eq, Ord, Show, Enum)
 data Sort = S | E | L deriving (Eq, Ord, Show, Enum)
 
@@ -41,7 +40,7 @@ data AST = Seq AST AST
          deriving (Eq, Ord, Show)
 
 input :: B.ByteString
-input = B.pack $ map enumToIntegral [Id {-a-}, ColonEq, Num {-7-}, Semicolon, Id {-b-}, ColonEq, Id {-c-}, Pls, ParensOpen, Id {-d-}, ColonEq, Num {-5-}, Pls, Num {-6-}, Cmma, Id {-d-}, ParensClose, EOF]
+input = B.pack $ map enumToIntegral [Id {-a-}, ColonEq, Num {-7-}, Semicolon, Id {-b-}, ColonEq, Id {-c-}, Pls, ParensOpen, Id {-d-}, ColonEq, Num {-5-}, Pls, Num {-6-}, Cmma, Id {-d-}, ParensClose]
 
 
 rule :: A.Array Int (M.Rule AST)
@@ -58,92 +57,83 @@ rule = (\l -> A.listArray (0,length l - 1) l)
   ]
 
 shift  n = Shift  $ (n-1,instrTable ! (n-1))
-reduce k = Reduce $ rule       ! (k-1)
+reduce k = Reduce $ rule            ! (k-1)
 
 instrTable :: M.InstrTable AST
 instrTable = buildTable $ map (map (\(a,b) -> (enumToIntegral a,b)))
-  [ [ (Id,   shift 4)
+  [ [ (Id,   shift 4)           -- 0
     , (Prnt, shift 7)
     ]
-  , [ (Semicolon, shift 3)
-    , (EOF,       Accept)
-    ]
-  , [ (Id,   shift 4)
+  , [ (Semicolon, shift 3) ]    -- 1
+  , [ (Id,   shift 4)           -- 2
     , (Prnt, shift 7)
     ]
-  , [ (ColonEq, shift 6) ]
-  , [ (Semicolon, reduce 1)
+  , [ (ColonEq, shift 6) ]      -- 3
+  , [ (Semicolon, reduce 1)     -- 4
     , (Cmma,      reduce 1)
-    , (EOF,       reduce 1)
     ]
-  , [ (Id,         shift 20)
+  , [ (Id,         shift 20)    -- 5
     , (Num,        shift 10)
     , (ParensOpen, shift 8)
     ]
-  , [ (ParensOpen, shift 9) ]
-  , [ (Id,   shift 4)
+  , [ (ParensOpen, shift 9) ]   -- 6
+  , [ (Id,   shift 4)           -- 7
     , (Prnt, shift 7)
     ]
-  , [ (Id,         shift 20)
+  , [ (Id,         shift 20)    -- 8
     , (Num,        shift 10)
     , (ParensOpen, shift 8)
     ]
-  , [ (Semicolon,   reduce 5)
+  , [ (Semicolon,   reduce 5)   -- 9
     , (Cmma,        reduce 5)
     , (Pls,         reduce 5)
     , (ParensClose, reduce 5)
-    , (EOF,         reduce 5)
     ]
-  , [ (Semicolon, reduce 2)
+  , [ (Semicolon, reduce 2)     -- 10
     , (Cmma,      reduce 2)
     , (Pls,       shift 16)
-    , (EOF,       reduce 2)
     ]
-  , [ (Semicolon, shift 3)
+  , [ (Semicolon, shift 3)      -- 11
     , (Cmma,      shift 18)
     ]
-  , [ (Semicolon, reduce 3)
+  , [ (Semicolon, reduce 3)     -- 12
     , (Cmma,      reduce 3)
-    , (EOF,       reduce 3)
     ]
-  , [ (Cmma,        shift 19)
+  , [ (Cmma,        shift 19)   -- 13
     , (ParensClose, shift 13)
     ]
-  , [ (Cmma,        reduce 8)
+  , [ (Cmma,        reduce 8)   -- 14
     , (ParensClose, reduce 8)
     ]
-  , [ (Id,         shift 20)
+  , [ (Id,         shift 20)    -- 15
     , (Num,        shift 10)
     , (ParensOpen, shift 8)
     ]
-  , [ (Semicolon,   reduce 6)
+  , [ (Semicolon,   reduce 6)   -- 16
     , (Cmma,        reduce 6)
     , (Pls,         shift 16)
     , (ParensClose, reduce 6)
-    , (EOF,         reduce 6)
     ]
-  , [ (Id,         shift 20)
+  , [ (Id,         shift 20)    -- 17
     , (Num,        shift 10)
     , (ParensOpen, shift 8)
     ]
-  , [ (Id,         shift 20)
+  , [ (Id,         shift 20)    -- 18
     , (Num,        shift 10)
     , (ParensOpen, shift 8)
     ]
-  , [ (Semicolon,   reduce 4)
+  , [ (Semicolon,   reduce 4)   -- 19
     , (Cmma,        reduce 4)
     , (Pls,         reduce 4)
     , (ParensClose, reduce 4)
-    , (EOF,         reduce 4)
     ]
-  , [ (ParensClose, shift 22) ]
-  , [ (Semicolon,   reduce 7)
+  , [ (ParensClose, shift 22) ] -- 20
+  , [ (Semicolon,   reduce 7)   -- 21
     , (Cmma,        reduce 7)
     , (Pls,         reduce 7)
     , (ParensClose, reduce 7)
-    , (EOF,         reduce 7)
     ]
-  , [ (Cmma,        reduce 9)
+  , [ (Cmma,        reduce 9)   -- 22
     , (Pls,         shift 16)
     , (ParensClose, reduce 9)
     ]
@@ -156,4 +146,16 @@ gotoTable = buildTable $ map (map (\(a,b) -> (a-1,(b-1,instrTable ! (b-1)))))
   , [(9,14)]                                    -- L
   ]
 
-main = print $ runParser instrTable input
+eofTable :: M.EOFTable AST
+eofTable = WordMap.fromList $ map (\(a,b) -> (a-1,b))
+  [ (2,  Accept)
+  , (5,  reduce 1)
+  , (10, reduce 5)
+  , (11, reduce 2)
+  , (13, reduce 3)
+  , (17, reduce 6)
+  , (20, reduce 4)
+  , (22, reduce 7)
+  ]
+
+main = print $ runParser instrTable eofTable input
