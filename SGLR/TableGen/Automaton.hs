@@ -49,7 +49,7 @@ type NFA s t = DFA s (NFATrans t)
 type LDFA s t = LGraph (AutoState s) t
 type LNFA s t = LDFA s (NFATrans t)
 
-toDfa :: (Ord s, Ord t, Eq t, Show s, Show t)
+toDfa :: (Ord s, Ord t)
       => NFA s t
       -> DFA (Set s) t
 toDfa g = Graph.renumber $ Graph.fromLGraph g''
@@ -70,14 +70,16 @@ findInitial g = case map fst $ filter (\(_,l) -> isInitial l) (Graph.nodes g) of
   _:_:_ -> error "Multiple initial states found"
   [i]   -> i
 
-closure :: (Eq t) => NFA s t -> Integer -> [Integer]
+closure :: NFA s t -> Integer -> [Integer]
 closure g n = closure' [] n -- Note the `List.\\ l'`, to stop the recursion!
   where closure' l m = m : (closure' l' =<< (eps List.\\ l'))
           where l' = m:l
                 eps = map fst $ filter isEpsAdj $ Set.toList $ Graph.outE g m
 
-isEpsAdj :: (Eq l) => Graph.Adj (NFATrans l) -> Bool
-isEpsAdj (_,l) = l == Eps
+isEpsAdj :: Graph.Adj (NFATrans l) -> Bool
+isEpsAdj (_,l) = case l of
+  Eps -> True
+  _   -> False
 
 psn l = sum $ map (\n -> 2^n) l -- PowerSetNumber
 psn'  = psn . Set.toList
@@ -89,11 +91,24 @@ setInitial initial' gr = case Maybe.fromJust $ Graph.lLabel initial' gr of
   Final  s -> Graph.lAddNode initial' (IFinal  s) gr
 
 buildDfa :: (Ord t, Eq t) => NFA s t -> Integer -> [Integer] -> LGraph (Set Integer) t -> LGraph (Set Integer) t
-buildDfa g n c gr = if Graph.lMember n gr then gr else Graph.lAddEdges es' gr''
+buildDfa g n c gr = if Graph.lMember n gr then gr else Graph.lAddEdges es gr''
   where gr'  = Graph.lAddNode n (Set.fromList c) gr
-        es   = (transWrapperToSet . filter (not . isEpsAdj) . Set.toList . Graph.outE g) =<< c
-        lmap = Map.toList $ Map.fromListWith Set.union es
-        es'  = map (\(l,s) -> (n,psn' s,l)) lmap
+        -- map from transitions (t) to Set of adjacent states (s)
+        lmap = multiAssocToAssocSet . nonEpsE g =<< c
+        es   = map (\(l,s) -> (n,psn' s,l)) lmap
+        
         ns   = map (\(_,s) -> let s' = Set.toList s in (psn s', s')) lmap
         gr'' = List.foldl' (flip $ uncurry $ buildDfa g) gr' ns
-        transWrapperToSet = map (\(n,NFATrans l) -> (l, Set.singleton n))
+
+
+unTransSwap :: [(a, NFATrans b)] -> [(b,a)]
+unTransSwap = map (\(n,NFATrans l) -> (l, n))
+
+multiAssocToAssocSet :: (Ord a, Ord b) => [(a,b)] -> [(a,Set b)]
+multiAssocToAssocSet = Map.toList . Map.fromListWith Set.union . map (\(a,b) -> (a,Set.singleton b))
+
+outE :: Graph n e -> Integer -> [Graph.Adj e]
+outE g = Set.toList . Graph.outE g
+
+nonEpsE :: NFA s t -> Integer -> [(t, Integer)]
+nonEpsE g = unTransSwap . filter (not . isEpsAdj) . outE g
