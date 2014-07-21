@@ -97,3 +97,6 @@ lAddEdge f t l = lAddEdges [(f,t,l)]
 
 lLabel :: Integer -> LGraph n e -> Maybe n
 lLabel n (ns,_) = List.lookup n ns
+
+lMember :: Integer -> LGraph n e -> Bool
+lMember n (ns,_) = List.elem n $ List.map fst ns

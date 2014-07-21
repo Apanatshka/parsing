@@ -53,38 +53,47 @@ toDfa :: (Ord s, Ord t, Eq t, Show s, Show t)
       => NFA s t
       -> DFA (Set s) t
 toDfa g = Graph.renumber $ Graph.fromLGraph g''
-  where g'    = buildDfa initial' initial Graph.lEmpty
-        g''   = setInitial $ Graph.lNodeMap (autoNodeSet . Set.map (Maybe.fromJust . Graph.label g)) g'
-        psn l = sum $ map (\n -> 2^n) l -- PowerSetNumber
-        psn'  = psn . Set.toList
-        n     = Graph.nodes g
-        e     = Graph.edges g
-        closure n = closure' [] n
-          where closure' l n = n : (closure' (n:l) =<< (map fst epsE List.\\ (n:l)))
-                  where epsE = filter (\(_,l) -> l == Eps) $ Set.toList $ Graph.outE g n
-        close n = (psn c, c) where c = closure n
-        initial = case map fst $ filter (\(_,l) -> isInitial l) n of
-          []    -> error "No initial state found"
-          _:_:_ -> error "Multiple initial states found"
-          [i]   -> closure i
+  where g'    = buildDfa g initial' initial Graph.lEmpty
+        g''   = setInitial initial' $ Graph.lNodeMap (setToNode . Set.map (Maybe.fromJust . Graph.label g)) g'
+        initial  = closure g (findInitial g)
         initial' = psn initial
-        --buildDfa :: s -> [s] -> LGraph (Set s) t -> LGraph (Set s) t
-        buildDfa n c gr = if lGraphMember n gr then gr else Graph.lAddEdges es' gr''
-          where gr'  = Graph.lAddNode n (Set.fromList c) gr
-                es   = (transWrapperToSet . removeEps . Set.toList . Graph.outE g) =<< c
-                lmap = Map.toList $ Map.fromListWith Set.union es
-                es'  = map (\(l,s) -> (n,psn' s,l)) lmap
-                ns   = map (\(_,s) -> let s' = Set.toList s in (psn s', s')) lmap
-                gr'' = List.foldl' (\gr''' n -> uncurry buildDfa n gr''') gr' ns
-                removeEps = filter (\(_,l) -> l /= Eps)
-                transWrapperToSet = map (\(n,NFATrans l) -> (l, Set.singleton n))
-        autoNodeSet s = if Set.filter isFinal s /= Set.empty
-            then Final s'
-            else Normal s'
-          where s' = Set.map getLabel s
-        --setInitial :: LGraph (AutoState s) t -> LGraph (AutoState s) t
-        setInitial gr = case Maybe.fromJust $ Graph.lLabel initial' gr of
-          Normal s -> Graph.lAddNode initial' (Initial s) gr
-          Final  s -> Graph.lAddNode initial' (IFinal  s) gr
-        lGraphMember :: Integer -> LGraph n e -> Bool
-        lGraphMember n (ns,_) = List.elem n $ List.map fst ns
+
+setToNode :: (Ord l) => Set (AutoState l) -> AutoState (Set l)
+setToNode s = if Set.filter isFinal s /= Set.empty
+    then Final s'
+    else Normal s'
+  where s' = Set.map getLabel s
+
+findInitial :: NFA s t -> Integer
+findInitial g = case map fst $ filter (\(_,l) -> isInitial l) (Graph.nodes g) of
+  []    -> error "No initial state found"
+  _:_:_ -> error "Multiple initial states found"
+  [i]   -> i
+
+closure :: (Eq t) => NFA s t -> Integer -> [Integer]
+closure g n = closure' [] n -- Note the `List.\\ l'`, to stop the recursion!
+  where closure' l m = m : (closure' l' =<< (eps List.\\ l'))
+          where l' = m:l
+                eps = map fst $ filter isEpsAdj $ Set.toList $ Graph.outE g m
+
+isEpsAdj :: (Eq l) => Graph.Adj (NFATrans l) -> Bool
+isEpsAdj (_,l) = l == Eps
+
+psn l = sum $ map (\n -> 2^n) l -- PowerSetNumber
+psn'  = psn . Set.toList
+close g n = (psn c, c) where c = closure g n
+
+setInitial :: Integer -> LDFA s t -> LDFA s t
+setInitial initial' gr = case Maybe.fromJust $ Graph.lLabel initial' gr of
+  Normal s -> Graph.lAddNode initial' (Initial s) gr
+  Final  s -> Graph.lAddNode initial' (IFinal  s) gr
+
+buildDfa :: (Ord t, Eq t) => NFA s t -> Integer -> [Integer] -> LGraph (Set Integer) t -> LGraph (Set Integer) t
+buildDfa g n c gr = if Graph.lMember n gr then gr else Graph.lAddEdges es' gr''
+  where gr'  = Graph.lAddNode n (Set.fromList c) gr
+        es   = (transWrapperToSet . filter (not . isEpsAdj) . Set.toList . Graph.outE g) =<< c
+        lmap = Map.toList $ Map.fromListWith Set.union es
+        es'  = map (\(l,s) -> (n,psn' s,l)) lmap
+        ns   = map (\(_,s) -> let s' = Set.toList s in (psn s', s')) lmap
+        gr'' = List.foldl' (flip $ uncurry $ buildDfa g) gr' ns
+        transWrapperToSet = map (\(n,NFATrans l) -> (l, Set.singleton n))
