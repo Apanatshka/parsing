@@ -1,4 +1,12 @@
 module SGLR.Engine where
+{-|
+Module      : SGLR.Engine
+Description : The parsing engine for this SGLR parser implementation.
+Copyright   : (c) Jeff Smits, 2014
+Licence     : MIT
+Maintainer  : jeff.smits@gmail.com
+Stability   : experimental
+-}
 
 import qualified Data.WordMap.Strict as WordMap
 import qualified Data.Array.IArray as A
