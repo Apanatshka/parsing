@@ -32,4 +32,5 @@ main = putStr $ Graph.prettify dfa
         firstLits = sortMapping2 ruleSorts sortMap firstLits1 -- transitions from sorts
         firsts    = sortMapping2 ruleSorts sortMap firstLits2
         follows   = followSet firsts rules startSymbol
-        dfa = Auto.toDfa (nfa rules startSymbol sortToRNo)
+        n = nfa rules startSymbol sortToRNo
+        dfa = Auto.toDfa n

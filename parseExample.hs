@@ -1,21 +1,19 @@
 import qualified Data.WordMap.Strict as WordMap
 import qualified Data.Array.IArray as A
 import Data.Array.IArray ((!))
---import qualified Data.Maybe as Maybe
---import Debug.Trace (traceShow)
 
 import qualified SGLR.Model as M
 --import qualified SGLR.Model.Binary as BM
 import SGLR.Model (Instruction(..), StackElem(..))
 import qualified Data.ByteString.Lazy as B
---import Data.Word
+import Data.Word
 
 import SGLR.Engine (runParser)
 
 -- grammar 3.1 from "modern compiler implementation in Java" second edition, by Andrew W. Appel
 
---buildTable :: (Num i, A.Ix i, A.IArray arr (WordMap.WordMap a)) => [[(WordMap.Key, a)]] -> arr i (WordMap.WordMap a)
-buildTable l = A.listArray (0, (fromIntegral $ length l') - 1) l' where l' = map WordMap.fromList l
+buildTable :: (Num i, A.Ix i, A.IArray arr e) => (a -> e) -> [a] -> arr i e
+buildTable f l = A.listArray (0, (fromIntegral $ length l') - 1) l' where l' = map f l
 
 enumToIntegral :: (Enum a, Num c) => a -> c
 enumToIntegral = fromIntegral . fromEnum
@@ -48,25 +46,28 @@ input = B.pack $ map enumToIntegral [Id {-a-}, ColonEq, Num {-7-}, Semicolon, Id
 
 rule :: A.Array Int (M.Rule AST)
 rule = (\l -> A.listArray (0,length l - 1) l)
-  [ (3, gotoTable ! (enumToIntegral S), \[Trm (_,e2), _, Trm (_,e1)] -> (enumToIntegral S, Seq e1 e2))     -- S = S ";" S
-  , (3, gotoTable ! (enumToIntegral S), \[Trm (_,e), _, _] -> (enumToIntegral S, Assign e))                -- S = id ":=" E
-  , (4, gotoTable ! (enumToIntegral S), \[_, Trm (_,l), _, _] -> (enumToIntegral S, Print l))              -- S = "print" "(" L ")"
-  , (1, gotoTable ! (enumToIntegral E), \[_] -> (enumToIntegral E, IdWrap))                                -- E = id
-  , (1, gotoTable ! (enumToIntegral E), \[_] -> (enumToIntegral E, NumWrap))                               -- E = num
-  , (3, gotoTable ! (enumToIntegral E), \[Trm (_,e2), _, Trm (_,e1)] -> (enumToIntegral E, Plus e1 e2))    -- E = E "+" E
-  , (5, gotoTable ! (enumToIntegral E), \[_, Trm (_,e), _, Trm (_,s), _] -> (enumToIntegral E, Tuple s e)) -- E = "(" S "," E ")"
-  , (1, gotoTable ! (enumToIntegral L), \[Trm (_,e)] -> (enumToIntegral E, e))                             -- L = E
-  , (3, gotoTable ! (enumToIntegral L), \[Trm (_,e), _, Trm (_,l)] -> (enumToIntegral L, Comma l e))       -- L = L "," E
+  [ (3, enumToIntegral S, \[Trm (_,e2), _, Trm (_,e1)] -> (enumToIntegral S, Seq e1 e2))     -- S = S ";" S
+  , (3, enumToIntegral S, \[Trm (_,e), _, _] -> (enumToIntegral S, Assign e))                -- S = id ":=" E
+  , (4, enumToIntegral S, \[_, Trm (_,l), _, _] -> (enumToIntegral S, Print l))              -- S = "print" "(" L ")"
+  , (1, enumToIntegral E, \[_] -> (enumToIntegral E, IdWrap))                                -- E = id
+  , (1, enumToIntegral E, \[_] -> (enumToIntegral E, NumWrap))                               -- E = num
+  , (3, enumToIntegral E, \[Trm (_,e2), _, Trm (_,e1)] -> (enumToIntegral E, Plus e1 e2))    -- E = E "+" E
+  , (5, enumToIntegral E, \[_, Trm (_,e), _, Trm (_,s), _] -> (enumToIntegral E, Tuple s e)) -- E = "(" S "," E ")"
+  , (1, enumToIntegral L, \[Trm (_,e)] -> (enumToIntegral E, e))                             -- L = E
+  , (3, enumToIntegral L, \[Trm (_,e), _, Trm (_,l)] -> (enumToIntegral L, Comma l e))       -- L = L "," E
   ]
 
 shift :: M.State -> Instruction AST
-shift  n = Shift  $ (n-1,instrTable ! (n-1))
+shift  n = Shift (n-1) (instrTable ! (n-1)) (gotoTable ! (n-1)) (WordMap.lookup (n-1) eofTable)
 
 reduce :: Int -> Instruction AST
 reduce k = Reduce $ rule            ! (k-1)
 
+goto :: Word -> (Word, M.InputToInstr AST, M.Goto AST, M.EOF AST)
+goto n = (n-1, instrTable ! (n-1), gotoTable ! (n-1), WordMap.lookup (n-1) eofTable)
+
 instrTable :: M.InstrTable AST
-instrTable = buildTable $ map (map (\(a,b) -> (enumToIntegral a,b)))
+instrTable = buildTable WordMap.fromList $ map (map (\(a,b) -> (enumToIntegral a,b)))
   [ [ (Id,   shift 4)           -- 0
     , (Prnt, shift 7)
     ]
@@ -146,10 +147,29 @@ instrTable = buildTable $ map (map (\(a,b) -> (enumToIntegral a,b)))
   ]
 
 gotoTable :: M.GotoTable AST
-gotoTable = buildTable $ map (map (\(a,b) -> (a-1,(b-1,instrTable ! (b-1)))))
-  [ [(1,2), (3,5), (8,12)]                      -- S
-  , [(6,11), (9,15), (16,17), (18,21), (19,23)] -- E
-  , [(9,14)]                                    -- L
+gotoTable = buildTable (M.Goto . WordMap.fromList) $ map (map (\(a,b) -> (enumToIntegral a, goto b)))
+  [ [(S, 2)]
+  , []
+  , [(S, 5)]
+  , []
+  , []
+  , [(E,11)]
+  , []
+  , [(S,12)]
+  , [(E,15), (L,14)]
+  , []
+  , []
+  , []
+  , []
+  , []
+  , []
+  , [(E,17)]
+  , []
+  , [(E,21)]
+  , [(E,23)]
+  , []
+  , []
+  , []
   ]
 
 eofTable :: M.EOFTable AST
@@ -165,4 +185,4 @@ eofTable = WordMap.fromList $ map (\(a,b) -> (a-1,b))
   ]
 
 main :: IO ()
-main = print $ runParser instrTable eofTable input
+main = print $ runParser instrTable gotoTable eofTable input

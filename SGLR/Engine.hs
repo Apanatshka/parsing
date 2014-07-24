@@ -23,48 +23,49 @@ bsFoldM :: (Word8 -> b -> Either (Maybe c) b) -> b -> B.ByteString -> Either (Ma
 bsFoldM f def = B.foldl' (\mb a -> (f a) =<< mb) (Right def)
 
 -- LR Parsing Engine
-runParser :: M.InstrTable a -> M.EOFTable a -> B.ByteString -> Maybe a
-runParser instrTable oefTable input = case bsFoldM parse [(0, instrTable ! 0, Inp 0)] input >>= eofParse oefTable of
+runParser :: M.InstrTable a -> M.GotoTable a -> M.EOFTable a -> B.ByteString -> Maybe a
+runParser instrTable gotoTable eofTable input = case eofParse =<< bsFoldM parse stack input of
   Left v  -> v
-  Right _ -> error "Parse failed: no Accept or Error was hit! "
+  Right _ -> error "runParser: Parse failed, no Accept or Error was hit! "
+  where stack = [(0, instrTable ! 0, gotoTable ! 0, WordMap.lookup 0 eofTable, Inp 0)]
 
 getInstr :: WordMap.Key -> WordMap.WordMap (Instruction a) -> Instruction a
 getInstr = WordMap.findWithDefault Error
 
 parse :: M.Input -> M.Stack a -> Either (Maybe a) (M.Stack a)
-parse inp stack@((_,i2i,_):_) =
+parse inp stack@((_,i2i,_,_,_):_) =
   parse' 
     (parse inp) 
-    (\st' i2i' stack' -> (st',i2i',Inp inp) : stack')
+    (\st' i2i' gt' mI' stack' -> (st',i2i',gt',mI',Inp inp) : stack')
     (getInstr (fromIntegral inp) i2i) 
     stack
 parse _ [] = error "parse: implementors logic is flawed or a bug was introduced later"
 
-eofParse :: M.EOFTable a -> M.Stack a -> Either (Maybe a) (M.Stack a)
-eofParse table stack@((state,_,_):_) =
+eofParse :: M.Stack a -> Either (Maybe a) (M.Stack a)
+eofParse stack@((_,_,_,mI,_):_) =
   parse' 
-    (eofParse table) 
-    (error "Shift instruction in the EOFTable") 
-    (getInstr state table) 
+    eofParse 
+    (error "eofParse: Shift instruction in the EOFTable") 
+    (Maybe.fromMaybe Error mI) 
     stack
-eofParse _ [] = error "eofParse: implementors logic is flawed or a bug was introduced later"
+eofParse [] = error "eofParse: implementors logic is flawed or a bug was introduced later"
 
 parse' :: (M.Stack a -> Either (Maybe a) (M.Stack a))
-       -> (M.State -> M.InputToInstr a -> M.Stack a -> M.Stack a)
+       -> (M.State -> M.InputToInstr a -> M.Goto a -> M.EOF a -> M.Stack a -> M.Stack a)
        ->  M.Instruction a
        ->  M.Stack a -> Either (Maybe a) (M.Stack a)
 parse' cont shift instr stack = case instr of
-  Shift  (st',i2i') -> Right $ shift st' i2i' stack
-  Reduce r          -> reduce cont r stack
-  Accept            -> Left $ Just $ (\(_,_,Trm (_,v)) -> v) $ head stack
-  Error             -> Left Nothing
+  Shift st' i2i' gt' mI' -> Right $ shift st' i2i' gt' mI' stack
+  Reduce r               -> reduce cont r stack
+  Accept                 -> Left $ Just $ (\(_,_,_,_,Trm (_,v)) -> v) $ head stack
+  Error                  -> Left Nothing
 
 reduce :: (M.Stack a -> Either (Maybe a) (M.Stack a)) -> M.Rule a -> M.Stack a -> Either (Maybe a) (M.Stack a)
 reduce parseFun r stack = parseFun =<< reductionResult
-  where (n, goto, action) = r
+  where (n, srt, action) = r
         (ruleArgs,stack') = splitAt (fromIntegral n) stack
-        term = action $ map (\(_,_,a) -> a) $ ruleArgs
-        state = (\(a,_,_) -> a) $ head stack'
-        maybeGotoState = WordMap.lookup state goto
-        doReduction (gotoState,i2i) = Right $ (gotoState, i2i, Trm term) : stack'
+        term = action $ map (\(_,_,_,_,a) -> a) $ ruleArgs
+        (_,_,M.Goto gt,_,_) = head stack'
+        maybeGotoState = WordMap.lookup srt gt
+        doReduction (gotoState,i2i',gt',mI') = Right $ (gotoState, i2i', gt', mI', Trm term) : stack'
         reductionResult = Maybe.maybe (Left Nothing) doReduction maybeGotoState

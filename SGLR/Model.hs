@@ -25,22 +25,22 @@ type Term a = (Sort,a) -- ^ A Term, made out of a Sort and the value constructed
 -- | The LR stack, holding the state,
 --   a map from input to instruction,
 --   the stackelement
-type Stack     a = [(State, InputToInstr a, StackElem a)]
+type Stack     a = [(State, InputToInstr a, Goto a, EOF a, StackElem a)]
 data StackElem a = Inp Input | Trm (Term a) deriving (Show) -- ^ A sum of Sort and Input
 
 -- | A number of stack elements to pop,
 --   the sort it produces,
 --   the action to perform on those stackelements
-type Rule a = (Word, Goto a, [StackElem a] -> Term a)
+type Rule a = (Word, Sort, [StackElem a] -> Term a)
 
 -- | The possible instructions in the state/input table
 --   The table for state/sort only contains Goto instruction and are therefore unlabeled
-data Instruction a = Shift  (State, InputToInstr a)
+data Instruction a = Shift State (InputToInstr a) (Goto a) (EOF a)
                    | Reduce (Rule a)
                    | Accept
                    | Error
 instance Show a => Show (Instruction a) where
-  show (Shift _)      = "Shift <WordMap>"
+  show (Shift _ _ _ _)  = "Shift <WordMap>"
   show (Reduce (w,_,_)) = "Reduce (" ++ show w ++ ",<WordMap>,<(->)>)"
   show Accept = "Accept"
   show Error = "Error"
@@ -50,10 +50,12 @@ type InstrTable   a = Array Word (InputToInstr a)
 type InputToInstr a = WordMap (Instruction a)
 -- ^ internal sparse Input -> Instruction mapping
 
--- | A mapping of Sort -> (sparse) State -> State
+-- | A mapping of State -> (sparse) Sort -> State
 type GotoTable a = Array Word (Goto a)
-type Goto      a = WordMap (State, InputToInstr a)
+newtype Goto   a = Goto { unGoto :: (WordMap (State, InputToInstr a, Goto a, EOF a)) }
 -- ^ internal sparse State -> State       mapping
 
 -- | A mapping of State -> Instruction at the EOF
 type EOFTable a = WordMap (Instruction a)
+
+type EOF a = Maybe (Instruction a)
