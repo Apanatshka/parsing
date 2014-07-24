@@ -18,37 +18,42 @@ import qualified Data.Map.Strict as Map
 import Data.Map (Map)
 import qualified Data.Maybe as Maybe
 import qualified Data.List as List
-import qualified Data.Array.IArray as A
-import Data.Word (Word)
-import qualified Data.Tuple as Tuple
+--import qualified Data.Array.IArray as A
+--import Data.Word (Word)
+--import qualified Data.Tuple as Tuple
 
-import SGLR.TableGen.Graph (Graph, LGraph)
+--import SGLR.TableGen.Graph (Graph, LGraph)
 import qualified SGLR.TableGen.Graph as Graph
-import SGLR.TableGen.Automaton (NFA, DFA, LNFA, LDFA, NFATrans(..), AutoState(..))
+import SGLR.TableGen.Automaton (NFA, NFATrans(..), AutoState(..))
 import qualified SGLR.TableGen.Automaton as Auto
-import SGLR.TableGen.Rule (Rule(..), RPart(..), Rule', RPart')
+import SGLR.TableGen.Rule (Rule(..), RPart(..), Rule')
 import qualified SGLR.TableGen.Rule as Rule
 
 import qualified SGLR.Model as Model
 
-import Debug.Trace (trace, traceShow)
+--import Debug.Trace (trace, traceShow)
 
-debug a = traceShow a a
+--debug a = traceShow a a
 
 pairWithInput :: (a -> b) -> a -> (a,b)
 pairWithInput f i = (i, f i)
 
+sortMapping1 :: (Ord k, Ord a) => [k] -> [a] -> Map k (Set a)
 sortMapping1 ruleSorts = Map.fromListWith (Set.union) . zip ruleSorts . map Set.singleton
+
+sortMapping2 :: Ord k => [k] -> t -> (t -> k -> a) -> Map k a
 sortMapping2 ruleSorts sortMap f = Map.fromList $ map (pairWithInput (f sortMap)) ruleSorts
 
-
+get :: Ord k => k -> Map k c -> c
 get k = Maybe.fromJust . Map.lookup k
+
+splits :: [a] -> [(Int,[a])]
 splits l = zip (map length $ List.inits l) (List.tails l)
 
 rulesToTables :: (Enum sort, Bounded sort, Ord sort, Enum lit, Bounded lit, Ord lit, Show lit, Show sort)
               => [Rule' sort lit]
               -> sort
-              -> (Model.InstrTable , Model.EOFTable)
+              -> (Model.InstrTable a, Model.EOFTable a)
 rulesToTables rule's startSymbol = error "TODO"
   where rules     = map Rule.fromRule' rule's
         ruleSorts = map Rule.ruleSort rules
@@ -76,6 +81,7 @@ nfa rules startSymbol sortToRuleNo = Graph.fromLGraph $ addInitial $ addAccept b
         ruleEdge (n1, (n2, part)) = (n1, n2, NFATrans part) : case part of
           Lit _ -> []
           Srt s -> map (\n2' -> (n1,n2',Eps)) $ Set.toList $ get s sortToRuleNo
+          EOF -> error "nfa: implementors logic is flawed or a bug was introduced later"
         initials = map fromIntegral $ List.elemIndices startSymbol $ map Rule.ruleSort rules
         fakeRule = StartRule startSymbol
         addAccept (n,g) = (n+1, Graph.lAddEdges (map (\from -> (from,n+1,NFATrans $ Srt startSymbol)) initials) $ Graph.lAddNodes [(n+1, Final (1,fakeRule))] g)
@@ -95,6 +101,7 @@ firstSorts :: (Ord lit, Ord sort)
 firstSorts sortMap sort = Set.filter (/= sort) $ Set.map Rule.fromSrt sorts
   where sorts = Set.filter Rule.isSrt $ firstHelper sortMap sort
 
+firstHelper :: (Ord sort, Ord lit, Ord k) => Map k (Set (Rule sort lit)) -> k -> Set (RPart sort lit)
 firstHelper sortMap sort = Set.map (head . Rule.ruleBody) $ get sort sortMap
 
 firstLits2 :: (Ord lit, Ord sort)
@@ -121,7 +128,7 @@ getFollowers :: (Ord lit, Ord sort)
              -> Map sort (Set lit)
              -> Map sort (Set (RPart sort lit))
              -> Rule sort lit
-             -> [(sort, Set (RPart sort lit))]
+             -> Set (RPart sort lit)
 getFollowers s firsts result r = 
   followersToSet firsts result
     $ map (headRightOrLeft rs)                -- get the heads of the follow lists
@@ -132,8 +139,16 @@ getFollowers s firsts result r =
   where rs = Rule.ruleSort r
         rb = Rule.ruleBody r
 
-bothOrNeither s a b = (a == s && b == s) || (a /= s && b /= s)
+bothOrNeither :: Eq a => a -> a -> a -> Bool
+bothOrNeither s a b = xnor (a == s) (b == s)
+
+xnor :: Bool -> Bool -> Bool
+xnor a b = not (a || b) || (a && b)
+
+headRightOrLeft :: a -> [b] -> Either a b
 headRightOrLeft k   = maybe (Left k) Right . Maybe.listToMaybe
+
+appendEmpty :: (Eq sort, Eq lit) => sort -> sort -> [[RPart sort lit]] -> [[RPart sort lit]]
 appendEmpty s k l   = 
   -- don't add empty list if recursive rule (i.e. s == k)
   if s /= k && elem (Srt s) (last l)
@@ -145,9 +160,10 @@ followersToSet :: (Ord lit, Ord sort)
                -> Map sort (Set (RPart sort lit))
                -> [Either sort (RPart sort lit)]
                -> Set (RPart sort lit)
-followersToSet firsts followSet eithers = Set.unions
-  $ flip map eithers $ \either ->
-    case either of
-      Left k        -> get k followSet
+followersToSet firsts follows followers = Set.unions
+  $ flip map followers $ \e ->
+    case e of
+      Left k        -> get k follows
       Right (Srt s) -> Set.map Lit $ get s firsts
       Right (Lit l) -> Set.singleton (Lit l)
+      Right EOF -> error "followersToSet: implementors logic is flawed or a bug was introduced later"

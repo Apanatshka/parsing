@@ -1,20 +1,22 @@
 import qualified Data.WordMap.Strict as WordMap
 import qualified Data.Array.IArray as A
 import Data.Array.IArray ((!))
-import qualified Data.Maybe as Maybe
-import Debug.Trace (traceShow)
+--import qualified Data.Maybe as Maybe
+--import Debug.Trace (traceShow)
 
 import qualified SGLR.Model as M
-import qualified SGLR.Model.Binary as BM
+--import qualified SGLR.Model.Binary as BM
 import SGLR.Model (Instruction(..), StackElem(..))
 import qualified Data.ByteString.Lazy as B
-import Data.Word
+--import Data.Word
 
 import SGLR.Engine (runParser)
 
 -- grammar 3.1 from "modern compiler implementation in Java" second edition, by Andrew W. Appel
 
+--buildTable :: (Num i, A.Ix i, A.IArray arr (WordMap.WordMap a)) => [[(WordMap.Key, a)]] -> arr i (WordMap.WordMap a)
 buildTable l = A.listArray (0, (fromIntegral $ length l') - 1) l' where l' = map WordMap.fromList l
+
 enumToIntegral :: (Enum a, Num c) => a -> c
 enumToIntegral = fromIntegral . fromEnum
 
@@ -57,7 +59,10 @@ rule = (\l -> A.listArray (0,length l - 1) l)
   , (3, gotoTable ! (enumToIntegral L), \[Trm (_,e), _, Trm (_,l)] -> (enumToIntegral L, Comma l e))       -- L = L "," E
   ]
 
+shift :: M.State -> Instruction AST
 shift  n = Shift  $ (n-1,instrTable ! (n-1))
+
+reduce :: Int -> Instruction AST
 reduce k = Reduce $ rule            ! (k-1)
 
 instrTable :: M.InstrTable AST
@@ -159,4 +164,5 @@ eofTable = WordMap.fromList $ map (\(a,b) -> (a-1,b))
   , (22, reduce 7)
   ]
 
+main :: IO ()
 main = print $ runParser instrTable eofTable input

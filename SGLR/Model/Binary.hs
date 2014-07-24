@@ -50,10 +50,10 @@ type State  = Word  -- ^ A state in the automaton that the SGLR parsing engine e
 -- performed on the data.
 type Rule = (Word, Sort, Action)
 
-data Action = Cons ByteString                  -- ^ Build a constructor around the data using the given name
-            | Cons' ByteString (BitArray Word) -- ^ Build a constructor around part of the data
-            | Pick Word                        -- ^ Pick one part of the data (0-indexed)
-            | Drop                             -- ^ Drop the data
+data Action = Cons  !ByteString                  -- ^ Build a constructor around the data using the given name
+            | Cons' !ByteString !(BitArray Word) -- ^ Build a constructor around part of the data
+            | Pick  !Word                        -- ^ Pick one part of the data (0-indexed)
+            | Drop                               -- ^ Drop the data
             deriving Generic
 instance Binary Action -- Generic derivation
 
@@ -61,10 +61,10 @@ type Rules = UArray Word Rule
 
 -- | The possible instructions in the state/input table
 --   The table for state/sort only contains Goto instruction and are therefore unlabeled
-data Instr = Shift State -- ^ shift and move to the given state
-           | Reduce Word -- ^ reduce by the given rule
-           | Accept      -- ^ accept
-           -- | Error -- ^ error. Not used.
+data Instr = Shift  !State -- ^ shift and move to the given state
+           | Reduce !Word  -- ^ reduce by the given rule
+           | Accept        -- ^ accept
+           -- | Error      -- ^ error. Not used.
            deriving Generic
 instance Binary Instr -- Generic derivation
 

@@ -4,17 +4,11 @@ import qualified SGLR.TableGen.Automaton as Auto
 import SGLR.TableGen.Rule (isA, cons, lit, srt)
 import qualified SGLR.TableGen.Rule as Rule
 
-import qualified Data.Set.Monad as Set
-import Data.Set.Monad (Set)
-import qualified Data.Map.Strict as Map
-import Data.Map (Map)
-import qualified Data.List as List
-import qualified Data.Maybe as Maybe
-
 data Sort = S | E | T deriving (Eq, Ord, Bounded, Enum, Show)
 data Lit = ParensOpen | ParensClose | Plus | N deriving (Eq, Ord, Bounded, Enum, Show)
 
 -- example from wikipedia: https://en.wikipedia.org/wiki/Canonical_LR_parser
+rule's :: [Rule.Rule' Sort Lit]
 rule's =
   [ isA S E
   , isA E T
@@ -24,8 +18,10 @@ rule's =
   , cons T [srt T, lit Plus, lit N] "_+_"
   ]
 
+startSymbol :: Sort
 startSymbol = S
 
+main :: IO ()
 main = putStr $ Graph.prettify dfa
   where rules     = map Rule.fromRule' rule's
         ruleSorts = map Rule.ruleSort rules

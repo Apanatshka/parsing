@@ -9,10 +9,10 @@ Stability   : experimental
 -}
 
 import qualified Data.WordMap.Strict as WordMap
-import qualified Data.Array.IArray as A
+--import qualified Data.Array.IArray as A
 import Data.Array.IArray ((!))
 import qualified Data.Maybe as Maybe
-import Debug.Trace (traceShow)
+--import Debug.Trace (traceShow)
 
 import qualified SGLR.Model as M
 import SGLR.Model (Instruction(..), StackElem(..))
@@ -28,15 +28,17 @@ runParser instrTable oefTable input = case bsFoldM parse [(0, instrTable ! 0, In
   Left v  -> v
   Right _ -> error "Parse failed: no Accept or Error was hit! "
 
+getInstr :: WordMap.Key -> WordMap.WordMap (Instruction a) -> Instruction a
 getInstr = WordMap.findWithDefault Error
 
 parse :: M.Input -> M.Stack a -> Either (Maybe a) (M.Stack a)
 parse inp stack@((_,i2i,_):_) =
   parse' 
     (parse inp) 
-    (\st' i2i' stack -> (st',i2i',Inp inp) : stack) 
+    (\st' i2i' stack' -> (st',i2i',Inp inp) : stack')
     (getInstr (fromIntegral inp) i2i) 
     stack
+parse _ [] = error "parse: implementors logic is flawed or a bug was introduced later"
 
 eofParse :: M.EOFTable a -> M.Stack a -> Either (Maybe a) (M.Stack a)
 eofParse table stack@((state,_,_):_) =
@@ -45,6 +47,7 @@ eofParse table stack@((state,_,_):_) =
     (error "Shift instruction in the EOFTable") 
     (getInstr state table) 
     stack
+eofParse _ [] = error "eofParse: implementors logic is flawed or a bug was introduced later"
 
 parse' :: (M.Stack a -> Either (Maybe a) (M.Stack a))
        -> (M.State -> M.InputToInstr a -> M.Stack a -> M.Stack a)

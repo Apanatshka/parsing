@@ -44,9 +44,11 @@ isSrt part = case part of
 
 fromLit :: RPart s l -> l
 fromLit (Lit l) = l
+fromLit _ = error "fromLit"
 
 fromSrt :: RPart s l -> s
 fromSrt (Srt s) = s
+fromSrt _ = error "fromSrt"
 
 -- | A (BNF-like) rule, augmented with a constructor name
 data Rule sort lit = Cons sort [RPart sort lit] String -- ^ normal rule with constructor name
@@ -97,7 +99,7 @@ lit :: lit -> RPart' sort lit
 lit l = RPart' (Lit l)
 
 cons :: sort -> [RPart' sort lit] -> String -> Rule' sort lit
-cons sort parts cons = Rule' (Cons sort (map fromRPart' parts) cons)
+cons sort parts constr = Rule' (Cons sort (map fromRPart' parts) constr)
 
 isA :: sort -> sort -> Rule' sort lit
 isA s1 s2 = Rule' (IsA s1 s2)
