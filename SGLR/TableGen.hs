@@ -48,17 +48,17 @@ splits l = zip (map length $ List.inits l) (List.tails l)
 rulesToTables :: (Enum sort, Bounded sort, Ord sort, Enum lit, Bounded lit, Ord lit, Show lit, Show sort)
               => [Rule' sort lit]
               -> sort
-              -> a -- (M.InstrTable , M.EOFTable)
+              -> (Model.InstrTable , Model.EOFTable)
 rulesToTables rule's startSymbol = error "TODO"
   where rules     = map Rule.fromRule' rule's
         ruleSorts = map Rule.ruleSort rules
-        ruleBodys = map Rule.ruleBody rules
+        --ruleBodys = map Rule.ruleBody rules
         sortMap   = sortMapping1 ruleSorts rules
         sortToRNo = sortMapping1 ruleSorts [0..]
-        firstSrts = sortMapping2 ruleSorts sortMap firstSorts -- epsilons between sorts
-        firstLits = sortMapping2 ruleSorts sortMap firstLits1 -- transitions from sorts
-        firsts    = sortMapping2 ruleSorts sortMap firstLits2
-        follows   = followSet firsts rules startSymbol
+        --firstSrts = sortMapping2 ruleSorts sortMap firstSorts -- epsilons between sorts
+        --firstLits = sortMapping2 ruleSorts sortMap firstLits1 -- transitions from sorts
+        --firsts    = sortMapping2 ruleSorts sortMap firstLits2
+        --follows   = followSet firsts rules startSymbol
         dfa = Auto.toDfa (nfa rules startSymbol sortToRNo)
 
 nfa :: (Enum sort, Bounded sort, Ord sort, Enum lit, Bounded lit, Ord lit, Show lit, Show sort)
@@ -86,23 +86,24 @@ firstLits1 :: (Ord lit, Ord sort)
             -> sort 
             -> Set lit
 firstLits1 sortMap sort = Set.map Rule.fromLit lits
-  where lits = Set.filter Rule.isLit $ Set.map (head . Rule.ruleBody) $ get sort sortMap
+  where lits = Set.filter Rule.isLit $ firstHelper sortMap sort
 
 firstSorts :: (Ord lit, Ord sort)
            => Map sort (Set (Rule sort lit))
            -> sort 
            -> Set sort
 firstSorts sortMap sort = Set.filter (/= sort) $ Set.map Rule.fromSrt sorts
-  where sorts = Set.filter Rule.isSrt $ Set.map (head . Rule.ruleBody) $ get sort sortMap
+  where sorts = Set.filter Rule.isSrt $ firstHelper sortMap sort
+
+firstHelper sortMap sort = Set.map (head . Rule.ruleBody) $ get sort sortMap
 
 firstLits2 :: (Ord lit, Ord sort)
            => Map sort (Set (Rule sort lit))
            -> sort 
            -> Set lit
-firstLits2 sortMap sort = Set.union lits' recLits
-  where (lits,sorts) = Set.partition Rule.isLit $ Set.map (head . Rule.ruleBody) $ get sort sortMap
-        lits' = Set.map Rule.fromLit lits
-        recLits = firstLits2 sortMap =<< (Set.filter (/= sort) $ Set.map Rule.fromSrt sorts)
+firstLits2 sortMap sort = Set.union lits recLits
+  where lits    = firstLits1 sortMap sort
+        recLits = firstLits2 sortMap =<< firstSorts sortMap sort
 
 followSet :: (Ord lit, Ord sort)
           => Map sort (Set lit)
@@ -115,6 +116,12 @@ followSet firsts rules start = result
         f s = (s, Set.unions $ map (getFollowers s firsts result) $ rulesWithSInBody)
           where rulesWithSInBody = filter (\r -> elem (Srt s) $ Rule.ruleBody r) rules
 
+getFollowers :: (Ord lit, Ord sort)
+             => sort
+             -> Map sort (Set lit)
+             -> Map sort (Set (RPart sort lit))
+             -> Rule sort lit
+             -> [(sort, Set (RPart sort lit))]
 getFollowers s firsts result r = 
   followersToSet firsts result
     $ map (headRightOrLeft rs)                -- get the heads of the follow lists

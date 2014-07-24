@@ -47,11 +47,13 @@ instance Show a => Show (Instruction a) where
 
 -- | A mapping of State -> (sparse) Input -> Instruction
 type InstrTable   a = Array Word (InputToInstr a)
-type InputToInstr a = WordMap (Instruction a) -- ^ internal sparse Input -> Instruction mapping
+type InputToInstr a = WordMap (Instruction a)
+-- ^ internal sparse Input -> Instruction mapping
 
 -- | A mapping of Sort -> (sparse) State -> State
 type GotoTable a = Array Word (Goto a)
-type Goto      a = WordMap (State, InputToInstr a) -- ^ internal sparse State -> State mapping
+type Goto      a = WordMap (State, InputToInstr a)
+-- ^ internal sparse State -> State       mapping
 
 -- | A mapping of State -> Instruction at the EOF
 type EOFTable a = WordMap (Instruction a)
