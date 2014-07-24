@@ -57,14 +57,14 @@ rule = (\l -> A.listArray (0,length l - 1) l)
   , (3, enumToIntegral L, \[Trm (_,e), _, Trm (_,l)] -> (enumToIntegral L, Comma l e))       -- L = L "," E
   ]
 
-shift :: M.State -> Instruction AST
-shift  n = Shift (n-1) (instrTable ! (n-1)) (gotoTable ! (n-1)) (WordMap.lookup (n-1) eofTable)
+shift :: Word -> Instruction AST
+shift  n = Shift (instrTable ! (n-1)) (gotoTable ! (n-1)) (WordMap.lookup (n-1) eofTable)
 
 reduce :: Int -> Instruction AST
 reduce k = Reduce $ rule            ! (k-1)
 
-goto :: Word -> (Word, M.InputToInstr AST, M.Goto AST, M.EOF AST)
-goto n = (n-1, instrTable ! (n-1), gotoTable ! (n-1), WordMap.lookup (n-1) eofTable)
+goto :: Word -> (M.InputToInstr AST, M.Goto AST, M.EOF AST)
+goto n = (instrTable ! (n-1), gotoTable ! (n-1), WordMap.lookup (n-1) eofTable)
 
 instrTable :: M.InstrTable AST
 instrTable = buildTable WordMap.fromList $ map (map (\(a,b) -> (enumToIntegral a,b)))
