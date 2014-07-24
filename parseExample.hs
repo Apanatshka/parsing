@@ -5,13 +5,14 @@ import qualified Data.Maybe as Maybe
 import Debug.Trace (traceShow)
 
 import qualified SGLR.Model as M
+import qualified SGLR.Model.Binary as BM
 import SGLR.Model (Instruction(..), StackElem(..))
 import qualified Data.ByteString.Lazy as B
 import Data.Word
 
 import SGLR.Engine (runParser)
 
--- grammar 3.1 from "modern compiler implementaion in Java" second edition, by Andrew W. Appel
+-- grammar 3.1 from "modern compiler implementation in Java" second edition, by Andrew W. Appel
 
 buildTable l = A.listArray (0, (fromIntegral $ length l') - 1) l' where l' = map WordMap.fromList l
 enumToIntegral :: (Enum a, Num c) => a -> c
