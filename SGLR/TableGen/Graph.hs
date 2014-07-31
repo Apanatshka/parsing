@@ -2,10 +2,8 @@ module SGLR.TableGen.Graph where
 
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (Maybe)
-import qualified Data.Maybe as Maybe
-import Data.Set (Set)
-import qualified Data.Set as Set
+import Data.Set.Monad (Set)
+import qualified Data.Set.Monad as Set
 import qualified Data.List as List
 
 -- | Data.Graph from both the containers and the graph-core package
@@ -26,9 +24,9 @@ type Adj edgeLabel = (Integer, edgeLabel)
 nodes :: Graph n e -> [Node n]
 nodes (nodeMap, _, _) = Map.assocs nodeMap
 
-edges :: Graph n e -> [Edge e]
+edges :: Ord e => Graph n e -> [Edge e]
 edges (_, forwardMap, _) = unpack =<< Map.assocs forwardMap
-  where unpack (from,set) = map (\(to,label) -> (from,to,label)) $ Set.toList set
+  where unpack (from,set) = map (\(to,lab) -> (from,to,lab)) $ Set.toList set
 
 graph :: Ord e => [Node n] -> [Edge e] -> Graph n e
 graph ns es = (nodeMap, toMap fwdE es', toMap bwdE es')
@@ -44,10 +42,10 @@ fromLGraph = uncurry graph
 empty :: Graph n e
 empty = (Map.empty, Map.empty, Map.empty)
 
-outE :: Graph n e -> Integer -> Set (Adj e)
+outE :: Ord e => Graph n e -> Integer -> Set (Adj e)
 outE (_, fwdMap, _) nodeId = Map.findWithDefault Set.empty nodeId fwdMap
 
-inE :: Graph n e -> Integer -> Set (Adj e)
+inE :: Ord e => Graph n e -> Integer -> Set (Adj e)
 inE (_, _, bwdMap) nodeId = Map.findWithDefault Set.empty nodeId bwdMap
 
 label :: Graph n e -> Integer -> Maybe n
@@ -56,12 +54,13 @@ label (nodeMap, _, _) n = Map.lookup n nodeMap
 nmap :: Graph n e -> (n -> n') -> Graph n' e
 nmap (nodeMap, fwd, bwd) f = (Map.map f nodeMap, fwd, bwd)
 
-prettify :: (Show n, Show e) => Graph n e -> String
+prettify :: (Ord e, Show n, Show e) => Graph n e -> String
 prettify g@(nodeMap, _, _) = pretty =<< ns
   where ns = Map.assocs nodeMap
-        pretty (n,l) =  show n ++ ". " 
-                     ++ show l ++ ": " 
-                     ++ show (Set.toList $ outE g n) ++ "\n"
+        pretty (n,l) =  show n       ++ ". " 
+                     ++ show l       ++ ": " 
+                     ++ show outList ++ "\n"
+          where outList = Set.toList $ outE g n
 
 renumber :: (Ord e) =>  Graph n e -> Graph n e
 renumber (nodeMap, fwdMap, bwdMap) = (nodeMap', fwdMap', bwdMap')

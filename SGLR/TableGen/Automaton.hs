@@ -3,18 +3,18 @@ module SGLR.TableGen.Automaton where
 import SGLR.TableGen.Graph (Graph, LGraph)
 import qualified SGLR.TableGen.Graph as Graph
 
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Data.Map (Map)
+import Data.Set.Monad (Set)
+import qualified Data.Set.Monad as Set
+--import Data.Map (Map)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (Maybe)
+--import Data.Maybe (Maybe)
 import qualified Data.Maybe as Maybe
 import qualified Data.List as List
-import Data.Word (Word)
+--import Data.Word (Word)
 
-import Debug.Trace (trace, traceShow)
+--import Debug.Trace (trace, traceShow)
 
-debug a = traceShow a a
+--debug a = traceShow a a
 
 data NFATrans label = Eps            -- ^ Epsilon
                     | NFATrans label -- ^ wrapper
@@ -25,18 +25,21 @@ data AutoState label = Normal  label
                      | IFinal  label
                      deriving (Eq, Ord, Show)
 
+isInitial :: AutoState t -> Bool
 isInitial an = case an of
   Normal  _ -> False
   Initial _ -> True
   Final   _ -> False
   IFinal  _ -> True
 
+isFinal :: AutoState t -> Bool
 isFinal an = case an of
   Normal  _ -> False
   Initial _ -> False
   Final   _ -> True
   IFinal  _ -> True
 
+getLabel :: AutoState t -> t
 getLabel an = case an of
   Normal  l -> l
   Initial l -> l
@@ -70,7 +73,7 @@ findInitial g = case map fst $ filter (\(_,l) -> isInitial l) (Graph.nodes g) of
   _:_:_ -> error "Multiple initial states found"
   [i]   -> i
 
-closure :: NFA s t -> Integer -> [Integer]
+closure :: Ord t => NFA s t -> Integer -> [Integer]
 closure g n = closure' [] n -- Note the `List.\\ l'`, to stop the recursion!
   where closure' l m = m : (closure' l' =<< (eps List.\\ l'))
           where l' = m:l
@@ -81,14 +84,21 @@ isEpsAdj (_,l) = case l of
   Eps -> True
   _   -> False
 
+psn :: (Integral b, Num a) => [b] -> a
 psn l = sum $ map (\n -> 2^n) l -- PowerSetNumber
-psn'  = psn . Set.toList
+
+psn' :: Set Integer -> Integer
+psn' = psn . Set.toList
+
+close :: (Num n, Ord t) => NFA s t -> Integer -> (n,[Integer])
 close g n = (psn c, c) where c = closure g n
 
 setInitial :: Integer -> LDFA s t -> LDFA s t
 setInitial initial' gr = case Maybe.fromJust $ Graph.lLabel initial' gr of
   Normal s -> Graph.lAddNode initial' (Initial s) gr
   Final  s -> Graph.lAddNode initial' (IFinal  s) gr
+  Initial _ -> gr
+  IFinal  _ -> gr
 
 buildDfa :: (Ord t, Eq t) => NFA s t -> Integer -> [Integer] -> LGraph (Set Integer) t -> LGraph (Set Integer) t
 buildDfa g n c gr = if Graph.lMember n gr then gr else Graph.lAddEdges es gr''
@@ -107,8 +117,8 @@ unTransSwap = map (\(n,NFATrans l) -> (l, n))
 multiAssocToAssocSet :: (Ord a, Ord b) => [(a,b)] -> [(a,Set b)]
 multiAssocToAssocSet = Map.toList . Map.fromListWith Set.union . map (\(a,b) -> (a,Set.singleton b))
 
-outE :: Graph n e -> Integer -> [Graph.Adj e]
+outE :: Ord e => Graph n e -> Integer -> [Graph.Adj e]
 outE g = Set.toList . Graph.outE g
 
-nonEpsE :: NFA s t -> Integer -> [(t, Integer)]
+nonEpsE :: Ord t => NFA s t -> Integer -> [(t, Integer)]
 nonEpsE g = unTransSwap . filter (not . isEpsAdj) . outE g

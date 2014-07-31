@@ -20,13 +20,16 @@ import Data.Word (Word, Word8)
 import Data.WordMap.Strict (WordMap)
 import qualified Data.WordMap.Strict as WordMap
 
+import Data.List (genericLength)
 import Data.Array (Ix)
-import Data.Array.Unboxed (UArray)
+import Data.Array (Array)
 import Data.Array.BitArray (BitArray)
 import qualified Data.Array.BitArray as BitArray
 import qualified Data.Array.BitArray.ByteString as BitArray
-
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as ByteString
+
+import qualified SGLR.TableGen.Rule as TGRule
 
 -- adapted from binary-0.7.2.1, Data.Binary.Class, the IntMap instance
 instance (Binary e) => Binary (WordMap e) where
@@ -57,7 +60,7 @@ data Action = Cons  !ByteString                  -- ^ Build a constructor around
             deriving Generic
 instance Binary Action -- Generic derivation
 
-type Rules = UArray Word Rule
+type Rules = Array Word Rule
 
 -- | The possible instructions in the state/input table
 --   The table for state/sort only contains Goto instruction and are therefore unlabeled
@@ -69,10 +72,17 @@ data Instr = Shift  !State -- ^ shift and move to the given state
 instance Binary Instr -- Generic derivation
 
 -- | A mapping of State -> (sparse) Input -> Instruction
-type InstrTable   = UArray Word (WordMap Instr)
+type InstrTable = Array Word (WordMap Instr)
 
 -- | A mapping of Sort -> (sparse) State -> State
-type GotoTable = UArray Word (WordMap State)
+type GotoTable = Array Word (WordMap State)
 
 -- | A mapping of State -> Instruction at the EOF
 type EOFTable = WordMap Instr
+
+-- | 
+toRule :: (Enum sort) => TGRule.Rule' sort lit -> Rule
+toRule r = case TGRule.fromRule' r of
+  TGRule.Cons s l c -> (genericLength l, fromIntegral $ fromEnum s, Cons $ ByteString.pack c)
+  TGRule.IsA  s1 _  -> (1, fromIntegral $ fromEnum s1, Pick 0)
+  TGRule.StartRule _-> error "toRule: implementors logic is flawed or a bug was introduced later"
