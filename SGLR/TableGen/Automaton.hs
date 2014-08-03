@@ -12,7 +12,7 @@ import qualified Data.Maybe as Maybe
 import qualified Data.List as List
 --import Data.Word (Word)
 
---import Debug.Trace (trace, traceShow)
+-- import Debug.Trace (trace, traceShow)
 
 --debug a = traceShow a a
 
@@ -55,7 +55,7 @@ type LNFA s t = LDFA s (NFATrans t)
 toDfa :: (Ord s, Ord t)
       => NFA s t
       -> DFA (Set s) t
-toDfa g = Graph.renumber $ Graph.fromLGraph g''
+toDfa g = renumber $ Graph.fromLGraph g''
   where g'    = buildDfa g initial' initial Graph.lEmpty
         g''   = setInitial initial' $ Graph.lNodeMap (setToNode . Set.map (Maybe.fromJust . Graph.label g)) g'
         initial  = closure g (findInitial g)
@@ -67,11 +67,22 @@ setToNode s = if Set.filter isFinal s /= Set.empty
     else Normal s'
   where s' = Set.map getLabel s
 
-findInitial :: NFA s t -> Integer
+findInitial :: Graph (AutoState t) e -> Integer
 findInitial g = case map fst $ filter (\(_,l) -> isInitial l) (Graph.nodes g) of
   []    -> error "No initial state found"
   _:_:_ -> error "Multiple initial states found"
   [i]   -> i
+
+-- | Renumbers the graph, but makes sure the initial state is 0
+renumber :: (Ord e) =>  Graph (AutoState t) e -> Graph (AutoState t) e
+renumber g@(nodeMap, fwdMap, bwdMap) = (nodeMap', fwdMap', bwdMap')
+  where initial  = findInitial g
+        renumberMap = Map.fromList $ (initial,0) : zip (List.delete initial $ Map.keys nodeMap) [1..]
+        mapKeys  = Map.mapKeys (renumberMap Map.!)
+        mapAdj   = Map.map $ Set.map $ \(adj,l) -> (renumberMap Map.! adj, l)
+        nodeMap' = mapKeys nodeMap
+        fwdMap'  = mapAdj $ mapKeys fwdMap
+        bwdMap'  = mapAdj $ mapKeys bwdMap
 
 closure :: Ord t => NFA s t -> Integer -> [Integer]
 closure g n = closure' [] n -- Note the `List.\\ l'`, to stop the recursion!
@@ -100,6 +111,8 @@ setInitial initial' gr = case Maybe.fromJust $ Graph.lLabel initial' gr of
   Initial _ -> gr
   IFinal  _ -> gr
 
+-- | Builds a DFA out of an NFA using powerset construction. The state
+-- numbers will be consecutive and the initial state will be 0.
 buildDfa :: (Ord t, Eq t) => NFA s t -> Integer -> [Integer] -> LGraph (Set Integer) t -> LGraph (Set Integer) t
 buildDfa g n c gr = if Graph.lMember n gr then gr else Graph.lAddEdges es gr''
   where gr'  = Graph.lAddNode n (Set.fromList c) gr
