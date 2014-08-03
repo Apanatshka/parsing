@@ -27,7 +27,7 @@ import Data.Array.BitArray (BitArray)
 import qualified Data.Array.BitArray as BitArray
 import qualified Data.Array.BitArray.ByteString as BitArray
 import Data.ByteString (ByteString)
-import qualified Data.ByteString.Char8 as ByteString
+import qualified Data.ByteString.Char8 as BSChar
 
 import qualified SGLR.TableGen.Rule as TGRule
 
@@ -40,6 +40,16 @@ instance (Binary e) => Binary (WordMap e) where
 instance (Binary i, Ix i) => Binary (BitArray i) where
   put m = put (BitArray.bounds m) >> put (BitArray.toByteString m)
   get   = liftM2 BitArray.fromByteString get get
+
+-- basic instances of Eq, Ord, Show using transformation to bytestring
+instance (Ix i) => Eq (BitArray i) where
+  a == b = (BitArray.toByteString a) == (BitArray.toByteString b)
+
+instance (Ix i) => Ord (BitArray i) where
+  a <= b = (BitArray.toByteString a) <= (BitArray.toByteString b)
+
+instance (Ix i) => Show (BitArray i) where
+  show a = show (BitArray.toByteString a)
 
 -- | The full "parse table", all info the engine (might/)will need.
 type ParseTable = (InstrTable, EOFTable, GotoTable, Rules)
@@ -57,7 +67,7 @@ data Action = Cons  !ByteString                  -- ^ Build a constructor around
             | Cons' !ByteString !(BitArray Word) -- ^ Build a constructor around part of the data
             | Pick  !Word                        -- ^ Pick one part of the data (0-indexed)
             | Drop                               -- ^ Drop the data
-            deriving Generic
+            deriving (Generic, Eq, Ord, Show)
 instance Binary Action -- Generic derivation
 
 type Rules = Array Word Rule
@@ -68,13 +78,13 @@ data Instr = Shift  !State -- ^ shift and move to the given state
            | Reduce !Word  -- ^ reduce by the given rule
            | Accept        -- ^ accept
            -- | Error      -- ^ error. Not used.
-           deriving Generic
+           deriving (Generic, Eq, Ord, Show)
 instance Binary Instr -- Generic derivation
 
 -- | A mapping of State -> (sparse) Input -> Instruction
 type InstrTable = Array Word (WordMap Instr)
 
--- | A mapping of Sort -> (sparse) State -> State
+-- | A mapping of State -> (sparse) Sort -> State
 type GotoTable = Array Word (WordMap State)
 
 -- | A mapping of State -> Instruction at the EOF
@@ -83,6 +93,6 @@ type EOFTable = WordMap Instr
 -- | 
 toRule :: (Enum sort) => TGRule.Rule' sort lit -> Rule
 toRule r = case TGRule.fromRule' r of
-  TGRule.Cons s l c -> (genericLength l, fromIntegral $ fromEnum s, Cons $ ByteString.pack c)
+  TGRule.Cons s l c -> (genericLength l, fromIntegral $ fromEnum s, Cons $ BSChar.pack c)
   TGRule.IsA  s1 _  -> (1, fromIntegral $ fromEnum s1, Pick 0)
   TGRule.StartRule _-> error "toRule: implementors logic is flawed or a bug was introduced later"

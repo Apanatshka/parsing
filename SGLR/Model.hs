@@ -28,6 +28,8 @@ type Term a = (Sort,a) -- ^ A Term, made out of a Sort and the value constructed
 type Stack     a = [(InputToInstr a, Goto a, EOF a, StackElem a)]
 data StackElem a = Inp Input | Trm (Term a) deriving (Show) -- ^ A sum of Sort and Input
 
+type State a = (InputToInstr a, Goto a, EOF a)
+
 -- | A number of stack elements to pop,
 --   the sort it produces,
 --   the action to perform on those stackelements
@@ -35,7 +37,7 @@ type Rule a = (Word, Sort, [StackElem a] -> Term a)
 
 -- | The possible instructions in the state/input table
 --   The table for state/sort only contains Goto instruction and are therefore unlabeled
-data Instruction a = Shift (InputToInstr a) (Goto a) (EOF a)
+data Instruction a = Shift (State a)
                    | Reduce (Rule a)
                    | Accept
                    | Error
@@ -52,8 +54,8 @@ type InputToInstr a = WordMap (Instruction a)
 
 -- | A mapping of State -> (sparse) Sort -> State
 type GotoTable a = Array Word (Goto a)
-newtype Goto   a = Goto { unGoto :: (WordMap (InputToInstr a, Goto a, EOF a)) }
--- ^ internal sparse State -> State       mapping
+newtype Goto   a = Goto { unGoto :: (WordMap (State a)) }
+-- ^ internal sparse Sort -> State       mapping
 
 -- | A mapping of State -> Instruction at the EOF
 type EOFTable a = WordMap (Instruction a)

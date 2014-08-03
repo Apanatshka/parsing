@@ -12,7 +12,7 @@ import qualified Data.WordMap.Strict as WordMap
 --import qualified Data.Array.IArray as A
 import Data.Array.IArray ((!))
 import qualified Data.Maybe as Maybe
---import Debug.Trace (traceShow)
+-- import Debug.Trace (traceShow)
 
 import qualified SGLR.Model as M
 import SGLR.Model (Instruction(..), StackElem(..))
