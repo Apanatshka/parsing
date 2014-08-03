@@ -1,39 +1,37 @@
-module SGLR.TableGen {-(
-  BNFPart
-, BNFRule(..)
-, rulesToTables
-)-} where
+module SGLR.TableGen where
 {-|
 Module      : SGLR.TableGen
-Description : The the parse table generator for this SGLR parser implementation. 
+Description : The parse table generator for this SGLR parser implementation. 
 Copyright   : (c) Jeff Smits, 2014
 Licence     : MIT
 Maintainer  : jeff.smits@gmail.com
 Stability   : experimental
 -}
 
-import qualified Data.Set.Monad as Set
 import Data.Set.Monad (Set)
-import qualified Data.Map.Strict as Map
+import qualified Data.Set.Monad as Set
 import Data.Map (Map)
+import qualified Data.Map.Strict as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.List as List
---import qualified Data.Array.IArray as A
---import Data.Word (Word)
---import qualified Data.Tuple as Tuple
+import qualified Data.Either as Either
+import Data.Array.IArray (IArray, Ix)
+import qualified Data.Array.IArray as IArray
+import Data.WordMap (WordMap)
+import qualified Data.WordMap as WordMap
+import Data.Word (Word)
 
---import SGLR.TableGen.Graph (Graph, LGraph)
 import qualified SGLR.TableGen.Graph as Graph
 import SGLR.TableGen.Automaton (NFA, NFATrans(..), AutoState(..))
 import qualified SGLR.TableGen.Automaton as Auto
 import SGLR.TableGen.Rule (Rule(..), RPart(..), Rule')
 import qualified SGLR.TableGen.Rule as Rule
+import SGLR.Model.Binary (ParseTable, InstrTable, EOFTable, GotoTable)
+import qualified SGLR.Model.Binary as BModel
 
-import qualified SGLR.Model as Model
+-- import Debug.Trace (trace, traceShow)
 
---import Debug.Trace (trace, traceShow)
-
---debug a = traceShow a a
+-- debug a = traceShow a a
 
 pairWithInput :: (a -> b) -> a -> (a,b)
 pairWithInput f i = (i, f i)
@@ -47,26 +45,134 @@ sortMapping2 ruleSorts sortMap f = Map.fromList $ map (pairWithInput (f sortMap)
 get :: Ord k => k -> Map k c -> c
 get k = Maybe.fromJust . Map.lookup k
 
+wmget :: Word -> WordMap e -> e
+wmget k = Maybe.fromJust . WordMap.lookup k
+
 splits :: [a] -> [(Int,[a])]
 splits l = zip (map length $ List.inits l) (List.tails l)
 
-rulesToTables :: (Enum sort, Bounded sort, Ord sort, Enum lit, Bounded lit, Ord lit, Show lit, Show sort)
+arrayFromList :: (IArray a e) => [e] -> a Word e
+arrayFromList l = IArray.listArray (0, List.genericLength l - 1) l
+
+emptyArray :: (IArray a e, Ix i) => (i,i) -> e -> a i e
+emptyArray bounds item = IArray.listArray bounds $ repeat item
+
+rulesToTables :: (Enum sort, Bounded sort, Ord sort, Enum lit, Ord lit, Show lit)
               => [Rule' sort lit]
               -> sort
-              -> (Model.InstrTable a, Model.EOFTable a)
-rulesToTables rule's startSymbol = error "TODO"
-  where rules     = map Rule.fromRule' rule's
-        ruleSorts = map Rule.ruleSort rules
-        --ruleBodys = map Rule.ruleBody rules
-        sortMap   = sortMapping1 ruleSorts rules
-        sortToRNo = sortMapping1 ruleSorts [0..]
-        --firstSrts = sortMapping2 ruleSorts sortMap firstSorts -- epsilons between sorts
-        --firstLits = sortMapping2 ruleSorts sortMap firstLits1 -- transitions from sorts
-        --firsts    = sortMapping2 ruleSorts sortMap firstLits2
-        --follows   = followSet firsts rules startSymbol
-        dfa = Auto.toDfa (nfa rules startSymbol sortToRNo)
+              -> ParseTable
+rulesToTables rule's startSymbol = (iT, eT, gT, mbRules)
+  where rules      = map Rule.fromRule' rule's
+        ruleSorts  = map Rule.ruleSort rules
+        sortMap    = sortMapping1 ruleSorts rules
+        sortToRNo  = sortMapping1 ruleSorts [0..]
+        firsts     = sortMapping2 ruleSorts sortMap firstLits2
+        follows    = followSet firsts rules startSymbol
+        dfa        = Auto.toDfa (nfa rules startSymbol sortToRNo)
+        mbRules    = arrayFromList $ map BModel.toRule rule's
+        dfa'       = map withOutE $ Graph.nodes dfa
+        withOutE   = pairWithInput (Graph.outE dfa . fst)
+        (iT,eT,gT) = List.foldl' (flip $ nodesToTables follows rules) emptyTs dfa'
+        emptyTs    = ( emptyArray (0, List.genericLength dfa' - 1) WordMap.empty
+                     , WordMap.empty
+                     , emptyArray (0, List.genericLength dfa' - 1) WordMap.empty )
+        -- this is a hack around not being able to just say (maxBound :: sort)
+        maxSort :: (Enum s, Bounded s) => s -> s
+        maxSort _ = maxBound
+        maxSrt = fromIntegral $ fromEnum $ maxSort $ head ruleSorts
 
-nfa :: (Enum sort, Bounded sort, Ord sort, Enum lit, Bounded lit, Ord lit, Show lit, Show sort)
+nodesToTables :: (Ord lit, Enum lit, Ord sort, Enum sort, Show lit)
+              => Map sort (Set (RPart sort lit))
+              -> [Rule sort lit]
+              -> (Graph.Node (Auto.AutoState (Set (Integer, Rule sort lit))), Set (Graph.Adj (RPart sort lit)))
+              -> (InstrTable, EOFTable, GotoTable)
+              -> (InstrTable, EOFTable, GotoTable)
+nodesToTables follows rules ((state, setOfRules), setOfEdges) (instrArr, eofWM, gotoArr) =
+  (instrArr'', eofWM'', gotoArr')
+  where eitherRules = map ruleToEither $ Set.toList $ Auto.getLabel setOfRules
+        ruleToEither (i,r) = case i `compare` List.genericLength (Rule.ruleBody r) of
+          EQ -> Right (fromIntegral $ Maybe.fromJust $ List.elemIndex r rules
+                      , Set.toList $ get (Rule.ruleSort r) follows)
+          LT -> Left  (fromIntegral $ Maybe.fromJust $ List.elemIndex r rules
+                      , Set.toList $ get (Rule.ruleSort r) follows)
+          GT -> error $ "nodesToTables: Something went wrong in the " ++
+                      "generation of the Automaton. The dot was put " ++
+                      "further than the body of the rule has items. "
+        (instrArr',  eofWM', gotoArr') = Set.foldr (edgeToInstr state') 
+                        (instrArr, eofWM, gotoArr) setOfEdges
+        (instrArr'', eofWM'') = List.foldr (ruleToReduce state') 
+                        (instrArr', eofWM') (Either.rights eitherRules)
+        state' = fromIntegral state
+
+edgeToInstr :: (Enum lit, Enum srt, Integral st2)
+            => Word
+            -> (st2, RPart srt lit)
+            -> (InstrTable, EOFTable, GotoTable)
+            -> (InstrTable, EOFTable, GotoTable)
+edgeToInstr state (to, rpart) (instrArr, eofWM, gotoArr) = 
+  case rpart of
+    Srt s -> (instrArr, eofWM, gotoArr IArray.// [(state, WordMap.insert gotee toState gotoWM)])
+      where gotee  = fromIntegral $ fromEnum s
+            gotoWM = gotoArr IArray.! state
+    Lit l -> (instrArr IArray.// [(state, WordMap.insert shiftee (BModel.Shift toState) instrWM)], eofWM, gotoArr)
+      where shiftee = fromIntegral $ fromEnum l
+            instrWM = instrArr IArray.! state
+    EOF   -> (instrArr, WordMap.insert state BModel.Accept eofWM, gotoArr)
+  where toState = fromIntegral to
+
+ruleToReduce :: (Enum lit, Enum srt, Show lit)
+             => Word
+             -> (Word,[RPart srt lit])
+             -> (InstrTable, EOFTable)
+             -> (InstrTable, EOFTable)
+ruleToReduce state (ruleNo, ruleFollows) (instrArr, eofWM) = 
+  List.foldr (followToReduce state ruleNo) (instrArr, eofWM) ruleFollows
+
+followToReduce :: (Enum lit, Enum srt, Show lit)
+               => Word
+               -> Word
+               -> RPart srt lit
+               -> (InstrTable, EOFTable)
+               -> (InstrTable, EOFTable)
+followToReduce state ruleNo follow (instrArr, eofWM) = case follow of
+  Lit lit -> (instrArr IArray.// [(state, WordMap.alter alterFun followLit instrWM)], eofWM)
+    where followLit   = fromIntegral $ fromEnum lit
+          instrWM     = instrArr IArray.! state
+          alterFun mI = case mI of
+            Nothing                -> Just $ BModel.Reduce ruleNo
+            Just (BModel.Shift _)  -> error $ "ruleToReduce: "
+                                           ++ "Shift-Reduce problem "
+                                           ++ "found in state "
+                                           ++ show state
+                                           ++ " for input " ++ show lit
+            Just (BModel.Reduce _) -> error $ "ruleToReduce: "
+                                           ++ "Reduce-Reduce problem "
+                                           ++ "found in state "
+                                           ++ show state
+                                           ++ " for input " ++ show lit
+            Just BModel.Accept -> error $ "ruleToReduce: implementors "
+                                       ++ "logic is flawed or a bug "
+                                       ++ "was introduced later"
+  EOF     -> (instrArr, WordMap.alter alterFun state eofWM)
+    where alterFun mI = case mI of
+            Nothing                -> Just $ BModel.Reduce ruleNo
+            Just (BModel.Reduce _) -> error $ "ruleToReduce: "
+                                           ++ "Reduce-Reduce problem "
+                                           ++ "found in state "
+                                           ++ show state ++ " for EOF"
+            Just BModel.Accept     -> error $ "ruleToReduce: "
+                                           ++ "Accept-Reduce problem "
+                                           ++ "found in state "
+                                           ++ show state ++ " for EOF"
+            Just (BModel.Shift _) -> error $ "ruleToReduce: "
+                                          ++ "implementors logic is "
+                                          ++ "flawed or a bug was "
+                                          ++ "introduced later"
+  Srt _ -> error $ "ruleToReduce: FollowSet was not correctly"
+                ++ " calculated: it contains Sorts where only Literals "
+                ++ "and EOF are expected. "
+
+nfa :: (Enum sort, Bounded sort, Ord sort, Enum lit, Ord lit)
     => [Rule sort lit]
     -> sort
     -> Map sort (Set Integer)
@@ -166,4 +272,5 @@ followersToSet firsts follows followers = Set.unions
       Left k        -> get k follows
       Right (Srt s) -> Set.map Lit $ get s firsts
       Right (Lit l) -> Set.singleton (Lit l)
-      Right EOF -> error "followersToSet: implementors logic is flawed or a bug was introduced later"
+      Right EOF -> error $ "followersToSet: implementors logic is "
+                        ++ "flawed or a bug was introduced later"
