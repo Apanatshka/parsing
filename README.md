@@ -7,3 +7,11 @@ So now I don't know where I'm going with this repo. I want to try to make a cach
 To actually find out if what I have in mind works --- to make an LR parse engine more cache-friendly --- will probably require that I implement it in some low-level language like C. But meh.. 
 
 So I'm not sure where I'm going with this code. For now it's an LR(1) parsing engine and parse table generator. Don't have tests yet. The table generator is missing a piece. But the parsing engine seems to work, and I was able to remove explicit state numbers from the stack. 
+
+example files
+-------------
+There are two example files here:
+
+1. `parseExample.hs` takes a parse table example from the book "Modern compiler implementation in Java" by Andrew W. Appel. In particular it's the table for grammar 3.1, table 3.19. 
+  This example uses ADTs to describe the input tokens and the non-terminals. By deriving `Enum` instances, these can be changed into numbers for the table. The code isn't very interesting otherwise, but it's nice to see that the table works with the parsing engine. 
+2. `tableGenExample.hs` takes a grammar --- this time from [wikipedia](https://en.wikipedia.org/wiki/Canonical_LR_parser) --- and transforms it into a table. This time the code is just a small amount that show how to use the exposed API from `SGLR.TableGen.Rule`. The grammar is slightly adapted from the one on wikipedia, as it also specifies some constructor names (so you don't have to define a whole AST type yourself like in `parseExample.hs`). 
