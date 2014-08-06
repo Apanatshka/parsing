@@ -26,7 +26,7 @@ bsFoldM f def = B.foldl' (\mb a -> (f a) =<< mb) (Right def)
 runParser :: M.InstrTable a -> M.GotoTable a -> M.EOFTable a -> B.ByteString -> Maybe a
 runParser instrTable gotoTable eofTable input = case eofParse =<< bsFoldM parse stack input of
   Left v  -> v
-  Right _ -> error "runParser: Parse failed, no Accept or Error was hit! "
+  Right _ -> Nothing -- error "runParser: Parse failed, no Accept or Error was hit! "
   where stack = [(instrTable ! 0, gotoTable ! 0, WordMap.lookup 0 eofTable, Inp 0)]
 
 getInstr :: WordMap.Key -> WordMap.WordMap (Instruction a) -> Instruction a
@@ -55,10 +55,10 @@ parse' :: (M.Stack a -> Either (Maybe a) (M.Stack a))
        ->  M.Instruction a
        ->  M.Stack a -> Either (Maybe a) (M.Stack a)
 parse' cont shift instr stack = case instr of
-  Shift  i2i' gt' mI' -> Right $ shift i2i' gt' mI' stack
-  Reduce r            -> reduce cont r stack
-  Accept              -> Left $ Just $ (\(_,_,_,Trm (_,v)) -> v) $ head stack
-  Error               -> Left Nothing
+  Shift  (i2i', gt', mI') -> Right $ shift i2i' gt' mI' stack
+  Reduce r                -> reduce cont r stack
+  Accept                  -> Left $ Just $ (\(_,_,_,Trm (_,v)) -> v) $ head stack
+  Error                   -> Left Nothing
 
 reduce :: (M.Stack a -> Either (Maybe a) (M.Stack a)) -> M.Rule a -> M.Stack a -> Either (Maybe a) (M.Stack a)
 reduce parseFun r stack = parseFun =<< reductionResult

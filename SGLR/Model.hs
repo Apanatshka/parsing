@@ -42,7 +42,7 @@ data Instruction a = Shift (State a)
                    | Accept
                    | Error
 instance Show a => Show (Instruction a) where
-  show (Shift _ _ _)    = "Shift <WordMap>"
+  show (Shift _)    = "Shift <WordMap>"
   show (Reduce (w,_,_)) = "Reduce (" ++ show w ++ ",<WordMap>,<(->)>)"
   show Accept = "Accept"
   show Error = "Error"
