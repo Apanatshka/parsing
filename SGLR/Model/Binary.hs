@@ -36,7 +36,7 @@ instance (Binary e) => Binary (WordMap e) where
   put m = put (WordMap.size m) >> mapM_ put (WordMap.toAscList m)
   get   = liftM WordMap.fromDistinctAscList get
 
--- inpired by binary-0.7.2.1, Data.Binary.Class, the UArray instance
+-- inspired by binary-0.7.2.1, Data.Binary.Class, the UArray instance
 instance (Binary i, Ix i) => Binary (BitArray i) where
   put m = put (BitArray.bounds m) >> put (BitArray.toByteString m)
   get   = liftM2 BitArray.fromByteString get get
