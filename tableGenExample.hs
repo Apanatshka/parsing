@@ -8,12 +8,12 @@ data Lit = ParensOpen | ParensClose | Plus | N deriving (Eq, Ord, Bounded, Enum,
 -- example from wikipedia: https://en.wikipedia.org/wiki/Canonical_LR_parser
 rule's :: [Rule.Rule' Sort Lit]
 rule's =
-  [ isA S E
-  , isA E T
-  , cons E [lit ParensOpen, srt E, lit ParensClose] "()"
-  , cons T [lit N] "T"
-  , cons T [lit Plus, srt T] "+"
-  , cons T [srt T, lit Plus, lit N] "_+_"
+  [ isA S E                                              -- ^ S -> E
+  , isA E T                                              -- ^ E -> T
+  , cons E [lit ParensOpen, srt E, lit ParensClose] "()" -- ^ E -> ( E )  {"()"}
+  , cons T [lit N] "T"                                   -- ^ T -> n      {"T"}
+  , cons T [lit Plus, srt T] "+"                         -- ^ T -> + T    {"+"}
+  , cons T [srt T, lit Plus, lit N] "_+_"                -- ^ T -> T + n  {"_+_"}
   ]
 
 startSymbol :: Sort
