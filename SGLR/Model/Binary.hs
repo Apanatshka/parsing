@@ -64,7 +64,7 @@ type State  = Word  -- ^ A state in the automaton that the SGLR parsing engine e
 type Rule = (Word, Sort, Action)
 
 data Action = Cons  !ByteString                  -- ^ Build a constructor around the data using the given name
-            | Cons' !ByteString !(BitArray Word) -- ^ Build a constructor around part of the data
+            | Cons' !ByteString !(BitArray Word) -- ^ Build a constructor around part of the data (bitarray says what to keep/drop with 1/0 resp.)
             | Pick  !Word                        -- ^ Pick one part of the data (0-indexed)
             | Drop                               -- ^ Drop the data
             deriving (Generic, Eq, Ord, Show)
@@ -90,7 +90,7 @@ type GotoTable = Array Word (WordMap State)
 -- | A mapping of State -> Instruction at the EOF
 type EOFTable = WordMap Instr
 
--- | 
+-- | Convert a TableGen rule to a Model.Binary rule (didn't know where else to put this)
 toRule :: (Enum sort) => TGRule.Rule' sort lit -> Rule
 toRule r = case TGRule.fromRule' r of
   TGRule.Cons s l c -> (genericLength l, fromIntegral $ fromEnum s, Cons $ BSChar.pack c)

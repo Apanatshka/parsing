@@ -1,3 +1,4 @@
+{-# LANGUAGE UnboxedTuples #-}
 module SGLR.Model where
 {-|
 Module      : SGLR.Model
@@ -13,9 +14,6 @@ Extensions : UnboxedTuples
 import Data.Word
 import Data.Array
 import Data.WordMap.Strict
-
--- unused for now
-{-# LANGUAGE UnboxedTuples #-}
 
 type Input  = Word8    -- ^ The input type, using what's in ByteStrings
 type Sort   = Word     -- ^ A Sort, usually a capital letter in BNF
